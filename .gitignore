@@ -1,0 +1,44 @@
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Backups
+*.backup
+backup.sql
+*.rdb
+dump.rdb
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Kubernetes
+kubeconfig*
+*.kubeconfig
+kubernetes/generated/
+
+# Node (caso existam ferramentas auxiliares)
+node_modules/
+
+# Python (caso existam scripts auxiliares)
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Terraform (caso usado para provisionamento)
+.terraform/
+*.tfstate
+*.tfstate.*
+terraform.tfvars
+
+# Opencode
+openspec/changes

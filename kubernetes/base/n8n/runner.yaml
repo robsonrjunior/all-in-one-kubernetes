@@ -1,0 +1,145 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: n8n-runner
+  namespace: all-in-one
+  labels:
+    app: n8n
+    component: runner
+spec:
+  type: ClusterIP
+  ports:
+    - port: 5678
+      targetPort: 5678
+      protocol: TCP
+      name: http
+  selector:
+    app: n8n
+    component: runner
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: n8n-runner
+  namespace: all-in-one
+  labels:
+    app: n8n
+    component: runner
+spec:
+  replicas: 4
+  selector:
+    matchLabels:
+      app: n8n
+      component: runner
+  template:
+    metadata:
+      labels:
+        app: n8n
+        component: runner
+    spec:
+      initContainers:
+        - name: wait-for-postgres
+          image: busybox:1.36
+          command:
+            - /bin/sh
+            - -c
+            - |
+              until nc -z postgres 5432; do
+                echo "Waiting for PostgreSQL..."
+                sleep 2
+              done
+              echo "PostgreSQL is ready!"
+        - name: wait-for-n8n-master
+          image: busybox:1.36
+          command:
+            - /bin/sh
+            - -c
+            - |
+              until wget -qO- http://n8n-master:5678/healthz > /dev/null 2>&1; do
+                echo "Waiting for n8n-master to finish migrations..."
+                sleep 3
+              done
+              echo "n8n-master is ready!"
+      containers:
+        - name: n8n-runner
+          image: n8nio/n8n:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 5678
+              name: http
+          env:
+            - name: EXECUTIONS_MODE
+              value: "queue"
+            - name: QUEUE_BULL_REDIS_HOST
+              value: "redis.all-in-one.svc.cluster.local"
+            - name: QUEUE_BULL_REDIS_PORT
+              value: "6379"
+            - name: QUEUE_BULL_REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: redis-secret
+                  key: REDIS_PASSWORD
+            - name: DB_TYPE
+              valueFrom:
+                configMapKeyRef:
+                  name: n8n-config
+                  key: DB_TYPE
+            - name: DB_POSTGRESDB_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: n8n-config
+                  key: DB_POSTGRESDB_HOST
+            - name: DB_POSTGRESDB_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: n8n-config
+                  key: DB_POSTGRESDB_PORT
+            - name: DB_POSTGRESDB_DATABASE
+              valueFrom:
+                configMapKeyRef:
+                  name: n8n-config
+                  key: DB_POSTGRESDB_DATABASE
+            - name: DB_POSTGRESDB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: n8n-secret
+                  key: DB_POSTGRESDB_USER
+            - name: DB_POSTGRESDB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: n8n-secret
+                  key: DB_POSTGRESDB_PASSWORD
+            - name: N8N_ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: n8n-secret
+                  key: N8N_ENCRYPTION_KEY
+            - name: NODE_ENV
+              value: "production"
+            - name: N8N_LOG_LEVEL
+              value: "info"
+            - name: N8N_EXTERNAL_STORAGE_S3_ENDPOINT
+              value: "http://minio.all-in-one.svc.cluster.local:9000"
+            - name: N8N_EXTERNAL_STORAGE_S3_BUCKET
+              value: "n8n-storage"
+          # resources:
+          #   requests:
+          #     cpu: 100m
+          #     memory: 128Mi
+          #   limits:
+          #     cpu: 500m
+          #     memory: 512Mi
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 5678
+            initialDelaySeconds: 60
+            periodSeconds: 10
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 5678
+            initialDelaySeconds: 30
+            periodSeconds: 5
+            timeoutSeconds: 3

@@ -1,0 +1,16 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: all-in-one-tls
+  namespace: all-in-one
+spec:
+  secretName: all-in-one-tls
+  issuerRef:
+    name: letsencrypt-staging
+    kind: ClusterIssuer
+    group: cert-manager.io
+  dnsNames:
+    - n8n.homolog.${DOMAIN}
+    - minio.homolog.${DOMAIN}
+    - signoz.homolog.${DOMAIN}
+    - rabbitmq.homolog.${DOMAIN}

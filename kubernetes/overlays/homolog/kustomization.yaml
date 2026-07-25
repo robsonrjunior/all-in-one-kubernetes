@@ -1,0 +1,98 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: all-in-one
+
+resources:
+  - ../../base
+  - certificate.yaml
+
+patches:
+  - patch: |-
+      apiVersion: networking.k8s.io/v1
+      kind: Ingress
+      metadata:
+        name: n8n-ingress
+        namespace: all-in-one
+      spec:
+        tls:
+          - hosts:
+              - n8n.homolog.${DOMAIN}
+            secretName: all-in-one-tls
+        rules:
+          - host: n8n.homolog.${DOMAIN}
+            http:
+              paths:
+                - path: /
+                  pathType: Prefix
+                  backend:
+                    service:
+                      name: n8n-master
+                      port:
+                        number: 5678
+  - patch: |-
+      apiVersion: networking.k8s.io/v1
+      kind: Ingress
+      metadata:
+        name: minio-ingress
+        namespace: all-in-one
+      spec:
+        tls:
+          - hosts:
+              - minio.homolog.${DOMAIN}
+            secretName: all-in-one-tls
+        rules:
+          - host: minio.homolog.${DOMAIN}
+            http:
+              paths:
+                - path: /
+                  pathType: Prefix
+                  backend:
+                    service:
+                      name: minio
+                      port:
+                        number: 9001
+  - patch: |-
+      apiVersion: networking.k8s.io/v1
+      kind: Ingress
+      metadata:
+        name: signoz-ingress
+        namespace: all-in-one
+      spec:
+        tls:
+          - hosts:
+              - signoz.homolog.${DOMAIN}
+            secretName: all-in-one-tls
+        rules:
+          - host: signoz.homolog.${DOMAIN}
+            http:
+              paths:
+                - path: /
+                  pathType: Prefix
+                  backend:
+                    service:
+                      name: signoz-frontend
+                      port:
+                        number: 3301
+  - patch: |-
+      apiVersion: networking.k8s.io/v1
+      kind: Ingress
+      metadata:
+        name: rabbitmq-ingress
+        namespace: all-in-one
+      spec:
+        tls:
+          - hosts:
+              - rabbitmq.homolog.${DOMAIN}
+            secretName: all-in-one-tls
+        rules:
+          - host: rabbitmq.homolog.${DOMAIN}
+            http:
+              paths:
+                - path: /
+                  pathType: Prefix
+                  backend:
+                    service:
+                      name: rabbitmq
+                      port:
+                        number: 15672

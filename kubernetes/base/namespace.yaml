@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: all-in-one
+  labels:
+    name: all-in-one
+    environment: all-in-one
