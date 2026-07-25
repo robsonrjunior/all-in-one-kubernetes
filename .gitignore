@@ -24,6 +24,9 @@ Thumbs.db
 kubeconfig*
 *.kubeconfig
 kubernetes/generated/
+tls-dev.crt
+tls-dev.key
+tls-dev-secret.yaml
 
 # Node (caso existam ferramentas auxiliares)
 node_modules/

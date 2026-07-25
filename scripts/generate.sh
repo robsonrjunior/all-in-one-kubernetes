@@ -38,9 +38,11 @@ fi
 if [ "${TLS_ENABLED:-false}" = "true" ]; then
   export INGRESS_ENTRYPOINT="websecure"
   export N8N_PROTOCOL="https"
+  export N8N_SECURE_COOKIE='"true"'
 else
   export INGRESS_ENTRYPOINT="web"
   export N8N_PROTOCOL="http"
+  export N8N_SECURE_COOKIE='"false"'
 fi
 
 # Valida que INGRESS_ENTRYPOINT esta definida

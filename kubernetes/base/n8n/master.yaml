@@ -88,6 +88,11 @@ spec:
                 configMapKeyRef:
                   name: n8n-config
                   key: N8N_PORT
+            - name: N8N_SECURE_COOKIE
+              valueFrom:
+                configMapKeyRef:
+                  name: n8n-config
+                  key: N8N_SECURE_COOKIE
             - name: DB_TYPE
               valueFrom:
                 configMapKeyRef:

@@ -48,15 +48,15 @@ kind: ConfigMap
 metadata:
   name: clickhouse-init
   namespace: all-in-one
-data:
-  init.sql: |
-    CREATE DATABASE IF NOT EXISTS signoz_traces;
-    CREATE DATABASE IF NOT EXISTS signoz_metrics;
-    CREATE TABLE IF NOT EXISTS signoz_traces.distributed_top_level_operations (
-      name LowCardinality(String),
-      serviceName LowCardinality(String)
-    ) ENGINE = ReplacingMergeTree
-    ORDER BY (serviceName, name);
+#data:
+#  init.sql: |
+#    CREATE DATABASE IF NOT EXISTS signoz_traces;
+#    CREATE DATABASE IF NOT EXISTS signoz_metrics;
+#    CREATE TABLE IF NOT EXISTS signoz_traces.distributed_top_level_operations (
+#      name LowCardinality(String),
+#      serviceName LowCardinality(String)
+#    ) ENGINE = ReplacingMergeTree
+#    ORDER BY (serviceName, name);
 ---
 apiVersion: v1
 kind: Service
@@ -273,7 +273,7 @@ spec:
       volumes:
         - name: config
           configMap:
-            name:   signoz-otel-config
+            name: signoz-otel-config
             items:
               - key: otel-collector-config.yaml
                 path: config.yaml
