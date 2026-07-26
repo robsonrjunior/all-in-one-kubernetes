@@ -6,6 +6,10 @@ metadata:
 data:
   otel-collector-config.yaml: |
     receivers:
+      otlp/spanmetrics:
+        protocols:
+          grpc:
+            endpoint: localhost:12345
       otlp:
         protocols:
           grpc:
@@ -14,49 +18,65 @@ data:
             endpoint: 0.0.0.0:4318
     processors:
       batch:
-        send_batch_size: 1000
+        send_batch_size: 10000
+        send_batch_max_size: 11000
         timeout: 10s
       memory_limiter:
         check_interval: 5s
         limit_mib: 512
+      signozspanmetrics/prometheus:
+        metrics_exporter: prometheus
+        latency_histogram_buckets: [100us, 1ms, 2ms, 6ms, 10ms, 50ms, 100ms, 250ms, 500ms, 1000ms, 1400ms, 2000ms, 5s, 10s, 20s, 40s, 60s]
+        dimensions_cache_size: 100000
+        dimensions:
+          - name: service.namespace
+            default: default
+          - name: deployment.environment
+            default: default
     exporters:
-      clickhouse/traces:
-        endpoint: tcp://signoz-clickhouse:9000
-        database: signoz_traces
-        ttl: 7
-      clickhouse/metrics:
-        endpoint: tcp://signoz-clickhouse:9000
-        database: signoz_metrics
-        ttl: 30
+      clickhousetraces:
+        datasource: tcp://signoz-clickhouse:9000/?username=default&password=signoz&database=signoz_traces
+      signozclickhousemetrics:
+        dsn: tcp://signoz-clickhouse:9000/?username=default&password=signoz&database=signoz_metrics
+      clickhouselogsexporter:
+        dsn: tcp://signoz-clickhouse:9000/?username=default&password=signoz&database=signoz_traces
+        timeout: 5s
+        sending_queue:
+          queue_size: 100
+        retry_on_failure:
+          enabled: true
+          initial_interval: 5s
+          max_interval: 30s
+          max_elapsed_time: 300s
+      prometheus:
+        endpoint: 0.0.0.0:8889
     service:
       pipelines:
         traces:
           receivers: [otlp]
-          processors: [memory_limiter, batch]
-          exporters: [clickhouse/traces]
+          processors: [signozspanmetrics/prometheus, memory_limiter, batch]
+          exporters: [clickhousetraces]
         metrics:
           receivers: [otlp]
           processors: [memory_limiter, batch]
-          exporters: [clickhouse/metrics]
+          exporters: [signozclickhousemetrics]
+        metrics/spanmetrics:
+          receivers: [otlp/spanmetrics]
+          exporters: [prometheus]
         logs:
           receivers: [otlp]
           processors: [memory_limiter, batch]
-          exporters: [clickhouse/traces]
+          exporters: [clickhouselogsexporter]
 ---
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: clickhouse-init
   namespace: all-in-one
-#data:
-#  init.sql: |
-#    CREATE DATABASE IF NOT EXISTS signoz_traces;
-#    CREATE DATABASE IF NOT EXISTS signoz_metrics;
-#    CREATE TABLE IF NOT EXISTS signoz_traces.distributed_top_level_operations (
-#      name LowCardinality(String),
-#      serviceName LowCardinality(String)
-#    ) ENGINE = ReplacingMergeTree
-#    ORDER BY (serviceName, name);
+data:
+  init.sql: |
+    CREATE DATABASE IF NOT EXISTS signoz_traces;
+    CREATE DATABASE IF NOT EXISTS signoz_metrics;
 ---
 apiVersion: v1
 kind: Service
@@ -156,6 +176,58 @@ spec:
       storage: 20Gi
   # storageClassName usa o default do cluster
 ---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: clickhouse-users-config
+  namespace: all-in-one
+data:
+  json_type.xml: |
+    <clickhouse>
+      <profiles>
+        <default>
+          <allow_experimental_json_type>1</allow_experimental_json_type>
+        </default>
+      </profiles>
+    </clickhouse>
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: clickhouse-cluster-config
+  namespace: all-in-one
+data:
+  cluster.xml: |
+    <clickhouse>
+      <keeper_server>
+        <tcp_port>9181</tcp_port>
+        <server_id>1</server_id>
+        <log_storage_path>/var/lib/clickhouse/coordination/log</log_storage_path>
+        <snapshot_storage_path>/var/lib/clickhouse/coordination/snapshots</snapshot_storage_path>
+        <coordination_settings>
+          <operation_timeout_ms>10000</operation_timeout_ms>
+          <session_timeout_ms>30000</session_timeout_ms>
+        </coordination_settings>
+        <raft_configuration>
+          <server>
+            <id>1</id>
+            <hostname>127.0.0.1</hostname>
+            <port>9444</port>
+          </server>
+        </raft_configuration>
+      </keeper_server>
+      <remote_servers>
+        <cluster>
+          <shard>
+            <replica>
+              <host>127.0.0.1</host>
+              <port>9000</port>
+            </replica>
+          </shard>
+        </cluster>
+      </remote_servers>
+    </clickhouse>
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -178,8 +250,11 @@ spec:
     spec:
       containers:
         - name: clickhouse
-          image: clickhouse/clickhouse-server:23.8-alpine
+          image: clickhouse/clickhouse-server:24.8-alpine
           imagePullPolicy: IfNotPresent
+          env:
+            - name: CLICKHOUSE_PASSWORD
+              value: "signoz"
           ports:
             - containerPort: 9000
               name: tcp
@@ -190,6 +265,12 @@ spec:
               mountPath: /var/lib/clickhouse
             - name: clickhouse-init
               mountPath: /docker-entrypoint-initdb.d
+            - name: clickhouse-cluster-config
+              mountPath: /etc/clickhouse-server/config.d/cluster.xml
+              subPath: cluster.xml
+            - name: clickhouse-users-config
+              mountPath: /etc/clickhouse-server/users.d/json_type.xml
+              subPath: json_type.xml
           # resources:
           #   requests:
           #     cpu: 500m
@@ -200,13 +281,13 @@ spec:
           livenessProbe:
             tcpSocket:
               port: 9000
-            initialDelaySeconds: 30
+            initialDelaySeconds: 90
             periodSeconds: 30
             timeoutSeconds: 10
           readinessProbe:
             tcpSocket:
               port: 9000
-            initialDelaySeconds: 15
+            initialDelaySeconds: 30
             periodSeconds: 10
             timeoutSeconds: 5
       volumes:
@@ -216,6 +297,12 @@ spec:
         - name: clickhouse-init
           configMap:
             name: clickhouse-init
+        - name: clickhouse-cluster-config
+          configMap:
+            name: clickhouse-cluster-config
+        - name: clickhouse-users-config
+          configMap:
+            name: clickhouse-users-config
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -237,9 +324,26 @@ spec:
         app: signoz
         component: otel-collector
     spec:
+      initContainers:
+        - name: wait-for-clickhouse
+          image: busybox:1.36
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              echo "Waiting for ClickHouse..."
+              for i in $(seq 1 30); do
+                if wget -qO- http://signoz-clickhouse:8123/ping 2>/dev/null | grep -q Ok; then
+                  echo "ClickHouse is ready!"
+                  exit 0
+                fi
+                echo "Waiting... ($i/30)"
+                sleep 2
+              done
+              echo "ClickHouse not ready after 30 attempts"
+              exit 1
       containers:
         - name: otel-collector
-          image: otel/opentelemetry-collector-contrib:0.91.0
+          image: signoz/signoz-otel-collector:latest
           imagePullPolicy: IfNotPresent
           args:
             - --config=/etc/otel/config.yaml
@@ -261,13 +365,13 @@ spec:
           livenessProbe:
             tcpSocket:
               port: 4317
-            initialDelaySeconds: 15
+            initialDelaySeconds: 30
             periodSeconds: 30
             timeoutSeconds: 10
           readinessProbe:
             tcpSocket:
               port: 4317
-            initialDelaySeconds: 10
+            initialDelaySeconds: 20
             periodSeconds: 10
             timeoutSeconds: 5
       volumes:
@@ -337,6 +441,23 @@ spec:
         app: signoz
         component: query-service
     spec:
+      initContainers:
+        - name: wait-for-clickhouse
+          image: busybox:1.36
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              echo "Waiting for ClickHouse..."
+              for i in $(seq 1 30); do
+                if wget -qO- http://signoz-clickhouse:8123/ping 2>/dev/null | grep -q Ok; then
+                  echo "ClickHouse is ready!"
+                  exit 0
+                fi
+                echo "Waiting... ($i/30)"
+                sleep 2
+              done
+              echo "ClickHouse not ready after 30 attempts"
+              exit 1
       containers:
         - name: query-service
           image: signoz/query-service:0.34.0
@@ -346,7 +467,7 @@ spec:
               name: http
           env:
             - name: ClickHouseUrl
-              value: "tcp://signoz-clickhouse:9000"
+              value: "tcp://signoz-clickhouse:9000?username=default&password=signoz"
             - name: STORAGE
               value: "clickhouse"
             - name: SIGNOZ_DB_PATH

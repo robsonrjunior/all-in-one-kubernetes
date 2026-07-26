@@ -15,4 +15,6 @@ resources:
   - n8n/worker.yaml
   - n8n/runner.yaml
   - n8n/otel-config.yaml
+  - admin/pgadmin.yaml
+  - admin/redisinsight.yaml
   - signoz/signoz.yaml

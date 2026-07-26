@@ -25,6 +25,11 @@ set -a
 source "$ENV_FILE"
 set +a
 
+# Mantém .env existentes compatíveis: por padrão, usa a tag da imagem n8n.
+if [ -z "${N8N_RUNNERS_IMAGE:-}" ]; then
+  export N8N_RUNNERS_IMAGE="n8nio/runners:${N8N_IMAGE##*:}"
+fi
+
 TARGET_ENV="${1:-}"
 
 if [ -n "$TARGET_ENV" ]; then
@@ -55,6 +60,8 @@ echo ">>> TLS_ENABLED=${TLS_ENABLED:-false} -> INGRESS_ENTRYPOINT=$INGRESS_ENTRY
 
 generate_env() {
   local env="$1"
+  echo ">>> Gerando overlay infra $env..."
+  kubectl kustomize --load-restrictor LoadRestrictionsNone "$PROJECT_ROOT/kubernetes/overlays/$env/infra/" | envsubst | sed -E 's/^(\s+[A-Z0-9_]+): ([0-9]+)$/\1: "\2"/' > "$GENERATED_DIR/$env-infra.yaml"
   echo ">>> Gerando overlay $env..."
   kubectl kustomize "$PROJECT_ROOT/kubernetes/overlays/$env/" | sed 's/\$uri\b/__NGINX_URI__/g' | envsubst | sed 's/__NGINX_URI__/$uri/g' | sed -E 's/^(\s+[A-Z0-9_]+): ([0-9]+)$/\1: "\2"/' > "$GENERATED_DIR/$env.yaml"
 }

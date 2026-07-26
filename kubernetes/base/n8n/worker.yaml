@@ -62,7 +62,7 @@ spec:
               echo "n8n-master is ready!"
       containers:
         - name: n8n-worker
-          image: n8nio/n8n:latest
+          image: ${N8N_IMAGE}
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 5678
@@ -118,6 +118,9 @@ spec:
               value: "production"
             - name: N8N_LOG_LEVEL
               value: "info"
+          envFrom:
+            - configMapRef:
+                name: n8n-otel-config
           # resources:
           #   requests:
           #     cpu: 200m

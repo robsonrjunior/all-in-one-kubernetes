@@ -14,6 +14,8 @@ Ambiente autossuficiente de automação baseado em n8n sobre Kubernetes, com sup
 | **RabbitMQ** | Message broker | 5672/15672 |
 | **MinIO** | Object storage compatível com S3 | 9000/9001 |
 | **SigNoz** | Observabilidade (traces, métricas, logs) | 3301 |
+| **pgAdmin** | Administração visual do PostgreSQL | 80 |
+| **RedisInsight** | Administração visual do Redis | 5540 |
 
 ## Estrutura
 
@@ -32,6 +34,7 @@ Ambiente autossuficiente de automação baseado em n8n sobre Kubernetes, com sup
 │   │   ├── secrets.yaml
 │   │   ├── storage/                # PostgreSQL, Redis, MinIO, RabbitMQ
 │   │   ├── n8n/                    # n8n Master, Workers, Runners, OTEL
+│   │   ├── admin/                  # pgAdmin, RedisInsight
 │   │   └── signoz/                 # SigNoz (ClickHouse, OTel, Query, Frontend)
 │   ├── overlays/
 │   │   ├── dev/                    # Minikube (nip.io, recursos reduzidos)
@@ -81,6 +84,8 @@ make deploy-dev
 | RabbitMQ | http://localhost:15672 | `make port-forward-rabbitmq` |
 | MinIO Console | http://localhost:9001 | `make port-forward-minio` |
 | SigNoz | http://localhost:3301 | `make port-forward-signoz` |
+| pgAdmin | http://localhost:8080 | `make port-forward-pgadmin` |
+| RedisInsight | http://localhost:5540 | `make port-forward-redisinsight` |
 
 #### Ingress via nip.io (multiserviço, single port)
 
@@ -109,6 +114,8 @@ kubectl port-forward -n ingress-nginx svc/ingress-nginx-controller 8080:80 8443:
 | RabbitMQ | http://rabbitmq.127.0.0.1.nip.io | https://rabbitmq.127.0.0.1.nip.io |
 | MinIO | http://minio.127.0.0.1.nip.io | https://minio.127.0.0.1.nip.io |
 | SigNoz | http://signoz.127.0.0.1.nip.io | https://signoz.127.0.0.1.nip.io |
+| pgAdmin | http://pgadmin.127.0.0.1.nip.io | https://pgadmin.127.0.0.1.nip.io |
+| RedisInsight | http://redisinsight.127.0.0.1.nip.io | https://redisinsight.127.0.0.1.nip.io |
 
 > Com portas altas, adicione a porta na URL: `http://n8n.127.0.0.1.nip.io:8080`
 
@@ -190,6 +197,8 @@ make deploy-homolog
 | MinIO | https://minio.homolog.exemplo.com |
 | SigNoz | https://signoz.homolog.exemplo.com |
 | RabbitMQ | https://rabbitmq.homolog.exemplo.com |
+| pgAdmin | https://pgadmin.homolog.exemplo.com |
+| RedisInsight | https://redisinsight.homolog.exemplo.com |
 
 ### Troubleshooting
 
@@ -242,6 +251,8 @@ O overlay de produção inclui:
 | MinIO | https://minio.exemplo.com |
 | SigNoz | https://signoz.exemplo.com |
 | RabbitMQ | https://rabbitmq.exemplo.com |
+| pgAdmin | https://pgadmin.exemplo.com |
+| RedisInsight | https://redisinsight.exemplo.com |
 
 ### Troubleshooting
 
@@ -272,12 +283,61 @@ O overlay de produção inclui:
 | `make port-forward-rabbitmq` | RabbitMQ Management em http://localhost:15672 |
 | `make port-forward-minio` | MinIO Console em http://localhost:9001 |
 | `make port-forward-signoz` | SigNoz em http://localhost:3301 |
+| `make port-forward-pgadmin` | pgAdmin em http://localhost:8080 |
+| `make port-forward-redisinsight` | RedisInsight em http://localhost:5540 |
 | `make logs-n8n` | Logs do n8n master |
 | `make logs-n8n-worker` | Logs do n8n worker |
+| `make logs-n8n-runner` | Logs do n8n task runner |
 | `make logs-postgres` | Logs do PostgreSQL |
 | `make logs-redis` | Logs do Redis |
 | `make logs-rabbitmq` | Logs do RabbitMQ |
 | `make logs-signoz` | Logs do SigNoz |
+
+---
+
+---
+
+## OpenTelemetry e n8n
+
+O n8n é instrumentado automaticamente com OpenTelemetry para enviar traces, métricas e logs ao SigNoz. A instrumentação usa auto-instrumentação Node.js carregada via `NODE_OPTIONS`, sem modificar o código fonte do n8n.
+
+### Imagem Docker customizada
+
+Como a imagem oficial `n8nio/n8n` não inclui os pacotes OpenTelemetry, é necessário fazer o build de uma imagem customizada:
+
+```bash
+docker build -t n8n-otel:latest -f docker/n8n/Dockerfile docker/n8n/
+```
+
+Depois defina no `.env`:
+```bash
+N8N_IMAGE=n8n-otel:latest
+```
+
+O Dockerfile em `docker/n8n/Dockerfile` estende `n8nio/n8n:latest` e adiciona `@opentelemetry/api` e `@opentelemetry/auto-instrumentations-node`.
+
+### Configuração OTEL
+
+As variáveis de ambiente OpenTelemetry são definidas no ConfigMap `n8n-otel-config` (`kubernetes/base/n8n/otel-config.yaml`) e injetadas nos componentes n8n (master e worker) via `envFrom`. O endpoint OTLP gRPC aponta para o OTel Collector do SigNoz em `signoz-otel-collector:4317`.
+
+Para verificar se os traces estão chegando, acesse o SigNoz e navegue até **Services** > **n8n**.
+
+---
+
+## Task Runners Externos
+
+O `n8n-runner` usa a imagem oficial `n8nio/runners` e conecta-se internamente ao task broker do `n8n-master` na porta `5679`. As imagens `N8N_IMAGE` e `N8N_RUNNERS_IMAGE` devem usar a mesma tag.
+
+Defina `N8N_RUNNERS_AUTH_TOKEN` no `.env` com um segredo aleatório forte, por exemplo `openssl rand -hex 32`. O valor é armazenado somente no Secret Kubernetes `n8n-secret` e é compartilhado pelo master e pelos runners.
+
+Após `make deploy`, confirme o rollout e a conexão com:
+
+```bash
+kubectl rollout status deployment/n8n-runner -n all-in-one --timeout=120s
+make logs-n8n-runner
+```
+
+Os pods do runner devem permanecer `Running` sem `CrashLoopBackOff`. Caso não conectem, confirme que o token do Secret é o mesmo nos dois Deployments e que `n8n-master` está disponível antes da inicialização dos runners.
 
 ---
 
@@ -300,6 +360,10 @@ Os limits/requests de CPU e memória são definidos pelo overlay Kustomize selec
 | `kubernetes/base/signoz/signoz.yaml` | SigNoz OTel Collector | 100m / 256Mi | 500m / 512Mi |
 | `kubernetes/base/signoz/signoz.yaml` | SigNoz Query Service | 100m / 256Mi | 500m / 512Mi |
 | `kubernetes/base/signoz/signoz.yaml` | SigNoz Frontend | 100m / 128Mi | 500m / 256Mi |
+| `kubernetes/base/admin/pgadmin.yaml` | pgAdmin | - | - |
+| `kubernetes/base/admin/redisinsight.yaml` | RedisInsight | - | - |
+
+> Para pgAdmin e RedisInsight, os limits estão comentados no base. Para ativar, descomente o bloco `resources:` no manifest base ou adicione um patch de resources no overlay correspondente.
 
 ### Requisitos mínimos recomendados
 
@@ -323,6 +387,8 @@ Redis        100m
 MinIO        100m
 RabbitMQ      -
 SigNoz       800m (ClickHouse 500m + OTel 100m + Query 100m + Frontend 100m)
+pgAdmin      -
+RedisInsight -
 ───────────────────
 Total prod  2450m (~2.5 vCPU) — com replicação completa em produção
 ```

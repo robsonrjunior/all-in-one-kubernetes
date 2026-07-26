@@ -13,6 +13,10 @@ spec:
       targetPort: 5678
       protocol: TCP
       name: http
+    - port: 5679
+      targetPort: 5679
+      protocol: TCP
+      name: task-broker
   selector:
     app: n8n
     component: master
@@ -67,11 +71,13 @@ spec:
               echo "PostgreSQL is ready!"
       containers:
         - name: n8n-master
-          image: n8nio/n8n:latest
+          image: ${N8N_IMAGE}
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 5678
               name: http
+            - containerPort: 5679
+              name: task-broker
           env:
             - name: N8N_HOST
               valueFrom:
@@ -138,6 +144,21 @@ spec:
                 configMapKeyRef:
                   name: n8n-config
                   key: N8N_LOG_LEVEL
+            - name: N8N_RUNNERS_MODE
+              valueFrom:
+                configMapKeyRef:
+                  name: n8n-config
+                  key: N8N_RUNNERS_MODE
+            - name: N8N_RUNNERS_BROKER_LISTEN_ADDRESS
+              valueFrom:
+                configMapKeyRef:
+                  name: n8n-config
+                  key: N8N_RUNNERS_BROKER_LISTEN_ADDRESS
+            - name: N8N_RUNNERS_AUTH_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: n8n-secret
+                  key: N8N_RUNNERS_AUTH_TOKEN
             - name: EXECUTIONS_MODE
               value: "queue"
             - name: QUEUE_BULL_REDIS_HOST
@@ -149,6 +170,9 @@ spec:
                 secretKeyRef:
                   name: redis-secret
                   key: REDIS_PASSWORD
+          envFrom:
+            - configMapRef:
+                name: n8n-otel-config
           volumeMounts:
             - name: n8n-data
               mountPath: /home/node/.n8n
