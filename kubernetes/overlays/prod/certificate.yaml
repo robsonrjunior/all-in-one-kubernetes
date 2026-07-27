@@ -13,3 +13,5 @@ spec:
     - ${N8N_HOST}
     - minio.${DOMAIN}
     - rabbitmq.${DOMAIN}
+    - pgadmin.${DOMAIN}
+    - redisinsight.${DOMAIN}

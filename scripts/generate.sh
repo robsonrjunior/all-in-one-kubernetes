@@ -41,7 +41,7 @@ fi
 
 # Deriva entrypoint do Ingress baseado em TLS_ENABLED
 if [ "${TLS_ENABLED:-false}" = "true" ]; then
-  export INGRESS_ENTRYPOINT="websecure"
+  export INGRESS_ENTRYPOINT="web,websecure"
   export N8N_PROTOCOL="https"
   export N8N_SECURE_COOKIE='"true"'
 else

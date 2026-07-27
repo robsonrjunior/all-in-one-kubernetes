@@ -13,3 +13,5 @@ spec:
     - n8n.homolog.${DOMAIN}
     - minio.homolog.${DOMAIN}
     - rabbitmq.homolog.${DOMAIN}
+    - pgadmin.homolog.${DOMAIN}
+    - redisinsight.homolog.${DOMAIN}
