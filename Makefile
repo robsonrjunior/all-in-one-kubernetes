@@ -1,4 +1,4 @@
-.PHONY: help generate deploy deploy-dev deploy-homolog deploy-prod teardown-dev teardown-homolog teardown-prod status validate port-forward-n8n port-forward-rabbitmq port-forward-minio port-forward-signoz port-forward-pgadmin port-forward-redisinsight logs-n8n logs-n8n-worker logs-n8n-runner logs-postgres logs-redis logs-rabbitmq logs-signoz
+.PHONY: help generate deploy deploy-dev deploy-homolog deploy-prod teardown-dev teardown-homolog teardown-prod status validate port-forward-n8n port-forward-rabbitmq port-forward-minio port-forward-pgadmin port-forward-redisinsight logs-n8n logs-n8n-worker logs-n8n-runner logs-postgres logs-redis logs-rabbitmq
 
 NAMESPACE ?= all-in-one
 .DEFAULT_GOAL := help
@@ -31,7 +31,7 @@ deploy-dev: ## Deploy no Minikube (desenvolvimento)
 	@echo ">>> Gerando manifestos..."
 	@bash scripts/generate.sh dev
 	@echo ">>> Verificando Minikube..."
-	@minikube status 2>/dev/null || (echo "Iniciando Minikube..." && minikube start --cpus=4 --memory=8192 --disk-size=40g)
+	@minikube status 2>/dev/null || (echo "Iniciando Minikube..." && minikube start --driver=docker --cpus=4 --memory=8192 --disk-size=40g)
 	@echo ">>> Fase 1: Infraestrutura (PostgreSQL + Redis)..."
 	kubectl apply -f kubernetes/generated/dev-infra.yaml
 	@echo ">>> Aguardando PostgreSQL..."
@@ -40,6 +40,7 @@ deploy-dev: ## Deploy no Minikube (desenvolvimento)
 	kubectl wait --for=condition=ready pod -l app=redis -n $(NAMESPACE) --timeout=60s || true
 	@echo ">>> Fase 2: Servicos..."
 	kubectl apply -f kubernetes/generated/dev.yaml
+	kubectl rollout restart deployment/n8n-master deployment/n8n-worker -n $(NAMESPACE)
 	@echo ">>> Aguardando n8n-master..."
 	kubectl wait --for=condition=ready pod -l app=n8n,component=master -n $(NAMESPACE) --timeout=120s || true
 	@echo ">>> Aguardando n8n-runner..."
@@ -57,6 +58,7 @@ deploy-homolog: ## Deploy no ambiente de homologacao
 	kubectl wait --for=condition=ready pod -l app=redis -n $(NAMESPACE) --timeout=60s || true
 	@echo ">>> Fase 2: Servicos..."
 	kubectl apply -f kubernetes/generated/homolog.yaml
+	kubectl rollout restart deployment/n8n-master deployment/n8n-worker -n $(NAMESPACE)
 	@echo ">>> Aguardando rollouts..."
 	kubectl rollout status deployment/n8n-master -n $(NAMESPACE) --timeout=120s || true
 	kubectl rollout status deployment/n8n-runner -n $(NAMESPACE) --timeout=120s || true
@@ -74,6 +76,7 @@ deploy-prod: ## Deploy no ambiente de producao
 	kubectl wait --for=condition=ready pod -l app=redis -n $(NAMESPACE) --timeout=60s || true
 	@echo ">>> Fase 2: Servicos..."
 	kubectl apply -f kubernetes/generated/prod.yaml
+	kubectl rollout restart deployment/n8n-master deployment/n8n-worker -n $(NAMESPACE)
 	@echo ">>> Aguardando rollouts..."
 	kubectl rollout status deployment/n8n-master -n $(NAMESPACE) --timeout=120s || true
 	kubectl rollout status deployment/n8n-worker -n $(NAMESPACE) --timeout=120s || true
@@ -154,9 +157,6 @@ port-forward-rabbitmq: ## Encaminha porta do RabbitMQ management para localhost:
 port-forward-minio: ## Encaminha porta do MinIO Console para localhost:9001
 	kubectl port-forward -n $(NAMESPACE) svc/minio 9001:9001
 
-port-forward-signoz: ## Encaminha porta do SigNoz para localhost:3301
-	kubectl port-forward -n $(NAMESPACE) svc/signoz-frontend 3301:3301
-
 port-forward-pgadmin: ## Encaminha porta do pgAdmin para localhost:8080
 	kubectl port-forward -n $(NAMESPACE) svc/pgadmin 8080:80
 
@@ -185,5 +185,4 @@ logs-redis: ## Exibe logs do Redis
 logs-rabbitmq: ## Exibe logs do RabbitMQ
 	kubectl logs -f -n $(NAMESPACE) deployment/rabbitmq
 
-logs-signoz: ## Exibe logs do SigNoz frontend
-	kubectl logs -f -n $(NAMESPACE) deployment/signoz-frontend
+

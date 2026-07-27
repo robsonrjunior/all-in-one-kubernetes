@@ -35,24 +35,9 @@ metadata:
 data:
   init.sql: |
     CREATE DATABASE n8n;
-    CREATE DATABASE signoz;
     CREATE USER n8n_user WITH PASSWORD '${N8N_DB_PASSWORD}';
-    CREATE USER signoz_user WITH PASSWORD '${SIGNOZ_DB_PASSWORD}';
     GRANT ALL PRIVILEGES ON DATABASE n8n TO n8n_user;
-    GRANT ALL PRIVILEGES ON DATABASE signoz TO signoz_user;
     \c n8n
     CREATE EXTENSION IF NOT EXISTS vector;
     GRANT ALL ON SCHEMA public TO n8n_user;
-    \c signoz
-    GRANT ALL ON SCHEMA public TO signoz_user;
----
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: signoz-config
-  namespace: all-in-one
-data:
-  query-service.yaml: |
-    retention:
-      traces: 7d
-      metrics: 30d
+

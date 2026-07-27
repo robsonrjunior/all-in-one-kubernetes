@@ -53,7 +53,7 @@ spec:
     spec:
       containers:
         - name: redisinsight
-          image: redis/redisinsight:latest
+          image: ${REDISINSIGHT_IMAGE}
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 5540

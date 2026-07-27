@@ -59,7 +59,7 @@ spec:
     spec:
       initContainers:
         - name: wait-for-postgres
-          image: busybox:1.36
+          image: ${BUSYBOX_IMAGE}
           command:
             - /bin/sh
             - -c
@@ -170,9 +170,6 @@ spec:
                 secretKeyRef:
                   name: redis-secret
                   key: REDIS_PASSWORD
-          envFrom:
-            - configMapRef:
-                name: n8n-otel-config
           volumeMounts:
             - name: n8n-data
               mountPath: /home/node/.n8n

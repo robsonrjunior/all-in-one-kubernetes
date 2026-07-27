@@ -52,7 +52,7 @@ spec:
     spec:
       containers:
         - name: minio
-          image: minio/minio:latest
+          image: ${MINIO_IMAGE}
           imagePullPolicy: IfNotPresent
           args:
             - server

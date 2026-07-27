@@ -39,7 +39,7 @@ spec:
     spec:
       initContainers:
         - name: wait-for-postgres
-          image: busybox:1.36
+          image: ${BUSYBOX_IMAGE}
           command:
             - /bin/sh
             - -c
@@ -50,7 +50,7 @@ spec:
               done
               echo "PostgreSQL is ready!"
         - name: wait-for-n8n-master
-          image: busybox:1.36
+          image: ${BUSYBOX_IMAGE}
           command:
             - /bin/sh
             - -c
@@ -118,9 +118,6 @@ spec:
               value: "production"
             - name: N8N_LOG_LEVEL
               value: "info"
-          envFrom:
-            - configMapRef:
-                name: n8n-otel-config
           # resources:
           #   requests:
           #     cpu: 200m

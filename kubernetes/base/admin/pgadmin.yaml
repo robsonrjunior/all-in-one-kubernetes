@@ -56,7 +56,7 @@ spec:
     spec:
       containers:
         - name: pgadmin
-          image: dpage/pgadmin4:9.16
+          image: ${PGADMIN_IMAGE}
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 80

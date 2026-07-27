@@ -8,8 +8,6 @@ context: |
   - Redis 7 (redis:7-alpine) como message broker para o Bull queue do n8n
   - RabbitMQ (rabbitmq:3-management) como message broker auxiliar
   - MinIO (minio/minio:latest) como object storage compatível com S3 para armazenamento de arquivos do n8n
-  - SigNoz como stack de observabilidade (ClickHouse, OTel Collector, Query Service, Frontend)
-  - OpenTelemetry para tracing distribuído
   - Traefik como Ingress Controller (via annotations traefik.ingress.kubernetes.io)
   - Busybox 1.36 para init containers de wait-for e init-db
   - Scripts de geração: Bash com envsubst para substituição de variáveis
@@ -29,7 +27,7 @@ context: |
   - Ambientes: dev (Minikube, nip.io, sem TLS, resources baixos), homolog (k3s, cert-manager staging), prod (k3s/cloud, cert-manager production, HA)
   - PostgreSQL roda como StatefulSet com volumeClaimTemplate (único stateful, os demais são Deployment)
   - Workers e Runners têm init containers duplos: wait-for-postgres + wait-for-n8n-master
-  - Postgres tem init container que copia init.sql (cria bancos n8n/signoz, usuários, extensão vector) para docker-entrypoint-initdb.d
+  - Postgres tem init container que copia init.sql (cria banco n8n, usuário, extensão vector) para docker-entrypoint-initdb.d
   - n8n usa queue mode: master recebe requisições HTTP, workers/runners processam jobs via Redis Bull queue
 
   ## Convenções
@@ -37,11 +35,11 @@ context: |
   - Labels: app=<service>, component=<subcomponent> (ex: app: n8n, component: worker)
   - Services: ClusterIP, com portas nomeadas
   - PVC naming: <service>-pvc, com accessMode ReadWriteOnce
-  - ConfigMap naming: <service>-config (n8n-config, signoz-config, postgres-init)
+  - ConfigMap naming: <service>-config (n8n-config, postgres-init)
   - Secret naming: <service>-secret (postgres-secret, redis-secret, minio-secret, n8n-secret)
   - Probes em todos os deployments: livenessProbe + readinessProbe (HTTP /healthz ou exec)
   - Resources são comentados no base e aplicados via patches nos overlays
-  - Ingress do tipo host-based routing (um Ingress por serviço: n8n-ingress, minio-ingress, signoz-ingress, rabbitmq-ingress)
+  - Ingress do tipo host-based routing (um Ingress por serviço: n8n-ingress, minio-ingress, rabbitmq-ingress)
   - Makefile como entrypoint de operações (deploy, teardown, validate, logs, port-forward)
   - Senhas e secrets no .env são templates ${VAR} que o generate.sh expande
   - RabbitMQ-secret está ausente (RabbitMQ usa variáveis de ambiente diretas no deployment)

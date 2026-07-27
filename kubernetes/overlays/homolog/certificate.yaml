@@ -12,5 +12,4 @@ spec:
   dnsNames:
     - n8n.homolog.${DOMAIN}
     - minio.homolog.${DOMAIN}
-    - signoz.homolog.${DOMAIN}
     - rabbitmq.homolog.${DOMAIN}
